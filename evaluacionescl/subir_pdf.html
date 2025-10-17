@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2 class="mb-4">Subir PDFs por tipo de texto</h2>
+
+    <form method="POST" enctype="multipart/form-data" onsubmit="return validarArchivos()">
+        {% csrf_token %}
+
+        <div class="mb-3">
+            <label for="archivo_argumentativo" class="form-label">Texto Argumentativo</label>
+            <input type="file" name="archivo_argumentativo" id="archivo_argumentativo" class="form-control" accept=".pdf">
+        </div>
+
+        <div class="mb-3">
+            <label for="archivo_descriptivo" class="form-label">Texto Descriptivo</label>
+            <input type="file" name="archivo_descriptivo" id="archivo_descriptivo" class="form-control" accept=".pdf">
+        </div>
+
+        <div class="mb-3">
+            <label for="archivo_expositivo" class="form-label">Texto Expositivo</label>
+            <input type="file" name="archivo_expositivo" id="archivo_expositivo" class="form-control" accept=".pdf">
+        </div>
+
+        <div class="mb-3">
+            <label for="archivo_narrativo" class="form-label">Texto Narrativo</label>
+            <input type="file" name="archivo_narrativo" id="archivo_narrativo" class="form-control" accept=".pdf">
+        </div>
+
+        <div class="d-grid">
+            <button type="submit" class="btn btn-primary">Subir todos los PDFs</button>
+        </div>
+    </form>
+</div>
+
+<script>
+function validarArchivos() {
+    const tipos = ['argumentativo', 'descriptivo', 'expositivo', 'narrativo'];
+    for (let tipo of tipos) {
+        let archivo = document.getElementById('archivo_' + tipo).files[0];
+        if (!archivo) {
+            alert('Debes subir un PDF para el texto ' + tipo);
+            return false;
+        }
+        if (!archivo.name.endsWith('.pdf')) {
+            alert('El archivo de ' + tipo + ' debe ser un PDF.');
+            return false;
+        }
+    }
+    return true;
+}
+</script>
+{% endblock %}

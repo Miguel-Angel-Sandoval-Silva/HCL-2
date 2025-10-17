@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Resultados del Alumno</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            display: flex;
+            min-height: 100vh;
+        }
+        .sidebar {
+            width: 250px;
+            background-color: #b61450;
+            color: white;
+            padding: 20px;
+        }
+        .sidebar h5, .sidebar a {
+            color: white;
+        }
+        .sidebar a {
+            display: block;
+            margin: 10px 0;
+            text-decoration: none;
+        }
+        .sidebar a:hover {
+            background-color: #9e1044;
+            padding-left: 10px;
+            border-radius: 5px;
+        }
+        .main {
+            flex-grow: 1;
+            padding: 30px;
+            background-color: #f6e5cd;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="text-center">
+            <div style="font-size: 50px;">👑</div>
+            <h5>{{ request.session.nombre_admin|default:"Administrador" }}</h5>
+        </div>
+        <hr>
+        <a href="{% url 'dashboard_admin' %}">🏠 Inicio admin</a>
+        <a href="{% url 'admin_resultados' %}">📊 Resultados globales</a>
+        <a href="{% url 'admin_estadisticas' %}">📈 Estadísticas por alumno</a>
+        <a href="{% url 'logout_admin' %}">🚪 Cerrar sesión</a>
+    </div>
+
+    <!-- Contenido principal -->
+    <div class="main">
+        <h2 class="mb-4">Resultados de {{ alumno.nombre }} {{ alumno.apellido }}</h2>
+
+        <table class="table table-bordered table-striped">
+            <thead class="table-dark">
+                <tr>
+                    <th>Tipo de texto</th>
+                    <th>Textos leídos</th>
+                    <th>Nivel de comprensión</th>
+                    <th>Gráfica</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in resultados %}
+                <tr>
+                    <td>{{ r.tipo }}</td>
+                    <td>{{ r.cantidad }}</td>
+                    <td>{{ r.nivel }}</td>
+                    <td>
+                        <a href="{% url 'ver_grafica_alumno_tipo' usuario_id r.tipo %}" class="btn btn-info btn-sm" style="background-color: #f6e5cd; border-color: #9e1044;">
+                            📈 Ver gráfica
+                        </a>                        
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+<!-- 👇 Gráfica de desempeño global del alumno -->
+<hr class="my-4">
+<div class="text-center">
+    <h4 class="mb-3">Desempeño global del alumno en comprensión lectora </h4>
+    {% if nivel_global %}
+    <div id="nivel-global-card" class="mt-4 fw-bold text-center text-white px-4 py-3 rounded" style="width: fit-content; margin: auto;">
+        Nivel: {{ nivel_global }}
+    </div>
+{% endif %}
+    <canvas id="graficaGlobal" height="100"></canvas>
+
+</div>
+
+<!-- Cargar Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<!-- Pasar datos de Python a JS -->
+{{ meses|json_script:"meses-data" }}
+{{ promedios|json_script:"promedios-data" }}
+
+<script>
+    const meses = JSON.parse(document.getElementById("meses-data").textContent);
+    const promedios = JSON.parse(document.getElementById("promedios-data").textContent);
+
+    // Colores dinámicos según nivel
+    const backgroundColors = promedios.map(p => {
+        if (p >= 90) return 'rgba(0, 200, 83, 0.6)';
+        if (p >= 60) return 'rgba(255, 206, 86, 0.6)';
+        if (p >= 30) return 'rgba(255, 159, 64, 0.6)';
+        return 'rgba(255, 99, 132, 0.6)';
+    });
+
+    const borderColors = backgroundColors.map(c => c.replace("0.6", "1"));
+
+    const ctx = document.getElementById("graficaGlobal").getContext("2d");
+
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: meses,
+            datasets: [{
+                data: promedios,
+                backgroundColor: backgroundColors,
+                borderColor: borderColors,
+                borderWidth: 2
+            }]
+        },
+        options: {
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => `Porcentaje: ${ctx.parsed.y}%`
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    ticks: {
+                        stepSize: 10,
+                        color: "#000",
+                        font: { weight: "bold" }
+                    },
+                    title: {
+                        display: true,
+                        text: "Porcentaje (%)",
+                        font: { weight: "bold" }
+                    }
+                },
+                x: {
+                    ticks: {
+                        color: "#000",
+                        font: { weight: "bold" }
+                    },
+                    title: {
+                        display: true,
+                        text: "Mes",
+                        font: { weight: "bold" }
+                    }
+                }
+            }
+        }
+    });
+</script>
+<script>
+    const nivelTexto = "{{ nivel_global }}".toLowerCase();
+    const card = document.getElementById("nivel-global-card");
+
+    if (card) {
+        let color = "#9e9e9e";  // Gris por defecto
+
+        if (nivelTexto.includes("alto")) {
+            color = "#00c853";  // Verde
+        } else if (nivelTexto.includes("medio")) {
+            color = "#ffca28";  // Amarillo
+        } else if (nivelTexto.includes("bajo")) {
+            color = "#ff9800";  // Naranja
+        } else if (nivelTexto.includes("deficiente")) {
+            color = "#e53935";  // Rojo
+        }
+
+        card.style.backgroundColor = color;
+    }
+</script>
+        <div class="text-center mt-4">
+            <a href="{% url 'admin_estadisticas' %}" class="btn btn-success mt-4 me-auto d-block" style="width: fit-content; background-color: #9e1044; border-color: #9e1044;"> ← Volver a estadísticas por alumno</a>
+        </div>
+    </div>
+</body>
+</html>
+

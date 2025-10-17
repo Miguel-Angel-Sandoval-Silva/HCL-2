@@ -1,0 +1,28 @@
+[2025-08-20 20:16:53] ************ Fin del proceso de reentrenamiento. ************
+[2025-08-20 20:16:53] STDERR: Some weights of BertForSequenceClassification were not initialized from the model checkpoint at dccuchile/bert-base-spanish-wwm-cased and are newly initialized: ['bert.pooler.dense.bias', 'bert.pooler.dense.weight', 'classifier.bias', 'classifier.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+Token indices sequence length is longer than the specified maximum sequence length for this model (614 > 512). Running this sequence through the model will result in indexing errors
+
+[2025-08-20 20:16:53] ************ Error durante el entrenamiento. ************
+[2025-08-20 19:32:32] Batch 100, Pérdida: 0.283250
+[2025-08-20 18:26:31] Batch 50, Pérdida: 0.565244
+[2025-08-20 17:18:45] ************ Época 2/5 ************
+[2025-08-20 17:18:45] Época 1 finalizada. Loss promedio: 0.637191
+[2025-08-20 16:36:15] Batch 150, Pérdida: 0.250952
+[2025-08-20 15:21:27] Batch 100, Pérdida: 0.389627
+[2025-08-20 14:01:31] Batch 50, Pérdida: 0.704774
+[2025-08-20 12:44:58] ************ Época 1/5 ************
+[2025-08-20 12:44:58] Modelo/tokenizer listos. Dispositivo: cpu
+[2025-08-20 12:44:57] Backup del modelo realizado en: /var/www/sistemagclectura/backups_modelos/trained_model_backup_2025-08-20_12-44-56
+[2025-08-20 12:44:56] Dataset cargado con 1452 registros.
+[2025-08-20 12:44:56] ************ INICIO DEL ENTRENAMIENTO ************
+[2025-08-20 12:44:49] ************ Inicia entrenamiento del modelo (sin nuevas; 1452 en total). ************
+[2025-08-20 12:44:49] Se creó un respaldo del modelo: model_20250820_124419.tar.gz
+[2025-08-20 12:44:19] No se agregaron nuevas inferencias al dataset.
+[2025-08-20 12:44:19] Entrenamiento forzado: se usará el dataset actual (sin nuevas).
+[2025-08-20 12:44:19] Nuevas inferencias detectadas: 0
+[2025-08-20 12:44:19] Duplicados dentro de esta corrida: 0
+[2025-08-20 12:44:19] Duplicados encontrados (ya estaban en el dataset): 0
+[2025-08-20 12:44:19] ************ VERIFICACIÓN DEL DATASET ************
+[2025-08-20 12:44:19] El dataset actual tiene 1452 registros.
+[2025-08-20 12:44:19] ************ INICIO DEL PROCESO DE REENTRENAMIENTO ************

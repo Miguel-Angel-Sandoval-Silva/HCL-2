@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Resetear Datos</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+
+<div class="container mt-5 text-center">
+    <h2 class="mb-4 text-danger">⚠️ Resetear datos</h2>
+    <p class="text-warning">Esta acción eliminará todos los usuarios, evaluaciones y reiniciará los IDs.</p>
+    
+    <form method="POST">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger btn-lg">
+            🔴 Eliminar todos los datos y reiniciar IDs
+        </button>
+    </form>
+
+    <a href="{% url 'dashboard_admin' %}" class="btn btn-secondary mt-4">← Cancelar y volver al panel</a>
+</div>
+
+</body>
+</html>

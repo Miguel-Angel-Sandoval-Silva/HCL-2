@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Gráfica del Alumno</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            display: flex;
+            min-height: 100vh;
+        }
+        .sidebar {
+            width: 250px;
+            background-color: #b61450;
+            color: white;
+            padding: 20px;
+        }
+        .sidebar h5, .sidebar a {
+            color: white;
+        }
+        .sidebar a {
+            display: block;
+            margin: 10px 0;
+            text-decoration: none;
+        }
+        .sidebar a:hover {
+            background-color: #9e1044;
+            padding-left: 10px;
+            border-radius: 5px;
+        }
+        .main {
+            flex-grow: 1;
+            padding: 30px;
+            background-color: #f6e5cd;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="text-center">
+            <div style="font-size: 50px;">👑</div>
+            <h5>{{ request.session.nombre_admin|default:"Administrador" }}</h5>
+        </div>
+        <hr>
+        <a href="{% url 'dashboard_admin' %}">🏠 Inicio admin</a>
+        <a href="{% url 'admin_resultados' %}">📊 Resultados globales</a>
+        <a href="{% url 'admin_estadisticas' %}">📈 Estadísticas por alumno</a>
+        <a href="{% url 'logout_admin' %}" >🚪 Cerrar sesión</a>
+    </div>
+
+<!-- Contenido principal -->
+<div class="main-content container mt-5">
+    <div class="card shadow-lg rounded-4 p-4">
+        <h2 class="mb-4 text-center">Gráfica por tipo de texto: {{ tipo }}</h2>
+
+        <div class="d-flex justify-content-center">
+            <div style="max-width: 1000px; width: 100%;">
+                <canvas id="graficaAlumno" height="150"></canvas>
+            </div>
+        </div>
+
+        <div class="text-center mt-4">
+            <a href="{% url 'ver_resultados_alumno' alumno_id %}" class="btn btn-success" style="background-color: #b61450; border-color: #b61450;">
+                ← Volver a resultados del alumno
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Datos JSON para Chart.js -->
+{{ titulos|json_script:"titulos-data" }}
+{{ porcentajes|json_script:"porcentajes-data" }}
+{{ tipos_inferencia|json_script:"inferencias-data" }}
+
+<!-- Chart.js -->
+<script>
+    const titulos = JSON.parse(document.getElementById('titulos-data').textContent);
+    const porcentajes = JSON.parse(document.getElementById('porcentajes-data').textContent);
+    const inferencias = JSON.parse(document.getElementById('inferencias-data').textContent);
+
+    const backgroundColors = [];
+    const tooltips = [];
+
+    porcentajes.forEach((p, i) => {
+        let color = "", nivel = "";
+
+        if (p >= 90) {
+            nivel = "Alto";
+            color = 'rgba(0, 200, 83, 0.6)';
+        } else if (p >= 60) {
+            nivel = "Medio";
+            color = 'rgba(255, 206, 86, 0.6)';
+        } else if (p >= 30) {
+            nivel = "Bajo";
+            color = 'rgba(255, 159, 64, 0.6)';
+        } else {
+            nivel = "Deficiente";
+            color = 'rgba(255, 99, 132, 0.6)';
+        }
+
+        backgroundColors.push(color);
+        tooltips.push(`${nivel} (${p.toFixed(0)}%) - ${inferencias[i] || "Sin clasificar"}`);
+    });
+
+    const ctx = document.getElementById("graficaAlumno").getContext("2d");
+
+    new Chart(ctx, {
+        type: "line",
+        data: {
+            labels: titulos,
+            datasets: [{
+                data: porcentajes,
+                backgroundColor: backgroundColors,
+                borderColor: backgroundColors,
+                borderWidth: 2
+            }]
+        },
+        options: {
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return tooltips[context.dataIndex] || "";
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: "Documentos leídos",
+                        color: "#000",
+                        font: { size: 14, weight: "bold" }
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return this.getLabelForValue(value).split("\n");
+                        },
+                        color: "#000",
+                        maxRotation: 25,
+                        minRotation: 25
+                    },
+                    grid: {
+                        drawOnChartArea: true,
+                        drawTicks: true
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    max: 110,
+                    ticks: {
+                        stepSize: 10,
+                        color: "#000"
+                    },
+                    title: {
+                        display: true,
+                        text: "Porcentaje (%)",
+                        color: "#000",
+                        font: { size: 14, weight: "bold" }
+                    },
+                    grid: {
+                        drawOnChartArea: true,
+                        drawTicks: true
+                    }
+                }
+            }
+        }
+    });
+</script>
+</body>
+</html>
+         
+
+    

@@ -1,0 +1,92 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Subir PDFs</title>
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <style>
+        body {
+            background-color: #fdebd0;
+            font-family: 'Segoe UI', sans-serif;
+            color: #1c1c1c;
+        }
+        .container {
+            max-width: 800px;
+            margin: 50px auto;
+            background-color: #fff5e6;
+            border-radius: 10px;
+            padding: 40px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.15);
+        }
+        h2 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #8b0000;
+        }
+        .pdf-group {
+            margin-bottom: 20px;
+        }
+        label {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 5px;
+        }
+        input[type="file"] {
+            width: 100%;
+            padding: 8px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            background-color: #fff;
+        }
+        .submit-btn {
+            background-color: #007b8a;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            width: 100%;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .submit-btn:hover {
+            background-color: #005f6b;
+        }
+        .alert {
+            color: red;
+            font-weight: bold;
+            display: none;
+            margin-top: 10px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Subir PDFs por tipo de texto</h2>
+	<h2>Nota: Debes subir un pdf en cada apartado para poder continuar</h2>
+        <form id="formularioPDF" method="post" enctype="multipart/form-data" action="{% url 'subir_pdf' %}">
+            {% csrf_token %}
+            <div class="pdf-group">
+                <label for="argumentativo">PDF Argumentativo:</label>
+                <input type="file" id="argumentativo" name="Argumentativo" accept="application/pdf" required>
+            </div>
+            <div class="pdf-group">
+                <label for="descriptivo">PDF Descriptivo:</label>
+                <input type="file" id="descriptivo" name="Descriptivo" accept="application/pdf" required>
+            </div>
+            <div class="pdf-group">
+                <label for="expositivo">PDF Expositivo:</label>
+                <input type="file" id="expositivo" name="Expositivo" accept="application/pdf" required>
+            </div>
+            <div class="pdf-group">
+                <label for="narrativo">PDF Narrativo:</label>
+                <input type="file" id="narrativo" name="Narrativo" accept="application/pdf" required>
+            </div>
+            <div class="alert" id="alertaFaltantes">⚠️ Debes seleccionar un PDF para cada tipo de texto.</div>
+            <button type="submit" class="submit-btn">Subir todos los PDFs</button>
+        </form>
+
+</body>
+</html>

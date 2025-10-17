@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Confirmar Reseteo</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            display: flex;
+            min-height: 100vh;
+        }
+        .sidebar {
+            width: 250px;
+            background-color: #b61450;
+            color: white;
+            padding: 20px;
+        }
+        .sidebar h5, .sidebar a {
+            color: white;
+        }
+        .sidebar a {
+            display: block;
+            margin: 10px 0;
+            text-decoration: none;
+        }
+        .sidebar a:hover {
+            background-color: #9e1044;
+            padding-left: 10px;
+            border-radius: 5px;
+        }
+        .main {
+            flex-grow: 1;
+            padding: 30px;
+            background-color: #f6e5cd;
+        }
+        .user-icon {
+            font-size: 50px;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="text-center">
+            <div style="font-size: 50px;">👑</div>
+            <h5>{{ request.session.nombre_admin|default:"Administrador" }}</h5>
+        </div>
+        <hr>
+        <a href="{% url 'dashboard_admin' %}">🏠 Inicio admin</a>
+        <a href="{% url 'admin_resultados' %}">📊 Resultados globales</a>
+        <a href="{% url 'admin_estadisticas' %}">📈 Estadísticas por alumno</a>
+        <a href="{% url 'logout_admin' %}">🚪 Cerrar sesión</a>
+    </div>
+<div class="container mt-5 text-center">
+    <h3 class="mb-4">⚠️ Precaución</h3>
+    <p class="text-warning">Esta acción eliminará todos los usuarios y evaluaciones.</p>
+
+    <form method="post">
+        {% csrf_token %}
+    <!--<button name="reset_usuarios" class="btn btn-warning me-2">🧹 Resetear solo usuarios</button>-->
+        <button name="reset_todo" class="btn btn-danger">💣 Resetear TODO el sistema</button>
+        <br><br>
+        <button name="cancelar" class="btn btn-success mt-3">🚫Cancelar</button>
+    </form>
+</div>
+</body>
+</html>
+

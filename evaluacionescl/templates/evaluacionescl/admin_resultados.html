@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Resultados Globales</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            display: flex;
+            min-height: 100vh;
+        }
+        .sidebar {
+            width: 250px;
+            background-color: #b61450;
+            color: white;
+            padding: 20px;
+        }
+        .sidebar h5, .sidebar a {
+            color: white;
+        }
+        .sidebar a {
+            display: block;
+            margin: 10px 0;
+            text-decoration: none;
+        }
+        .sidebar a:hover {
+            background-color: #9e1044;
+            padding-left: 10px;
+            border-radius: 5px;
+        }
+        .main {
+            flex-grow: 1;
+            padding: 30px;
+            background-color: #f6e5cd;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="text-center">
+            <div style="font-size: 50px;">👑</div>
+            <h5>{{ request.session.nombre_admin|default:"Administrador" }}</h5>
+        </div>
+        <hr>
+        <a href="{% url 'dashboard_admin' %}">🏠 Inicio admin</a>
+        <a href="{% url 'admin_resultados' %}">📊 Resultados globales</a>
+        <a href="{% url 'admin_estadisticas' %}">📈 Estadísticas por alumno</a>
+        <a href="{% url 'logout_admin' %}">🚪 Cerrar sesión</a>
+    </div>
+
+    <!-- Contenido principal -->
+    <div class="main">
+        <h2 class="mb-4">Resumen global por tipo de texto</h2>
+
+        <p><strong>Total de usuarios registrados:</strong> {{ total_usuarios }}</p>
+
+        <table class="table table-bordered table-striped mt-3" id="tablaGlobal">
+            <thead class="table-dark">
+                <tr>
+                    <th>Tipo de texto</th>
+                    <th>Documentos leídos</th>
+                    <th>Puntaje total</th>
+                    <th>Nivel de comprensión</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for fila in resumen %}
+                <tr>
+                    <td>{{ fila.tipo }}</td>
+                    <td>{{ fila.cantidad }}</td>
+                    <td>{{ fila.puntaje_total }}</td>
+                    <td>{{ fila.nivel }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <a href="{% url 'exportar_resultados_excel' %}" class="btn btn-success mt-3" style="background-color: #173966; border-color: #173966;">⬇ Exportar a Excel</a>
+
+        <div class="text-center mt-4">
+            <a href="{% url 'dashboard_admin' %}" class="btn btn-success mt-4 me-auto d-block" style="width: fit-content; background-color: #9e1044; border-color: #9e1044;"> ← Volver al inicio</a>
+        </div>
+    </div>
+</body>
+</html>
+
+

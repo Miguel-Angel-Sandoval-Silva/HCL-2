@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Estadísticas por Alumno</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            display: flex;
+            min-height: 100vh;
+        }
+        .sidebar {
+            width: 250px;
+            background-color: #b61450;
+            color: white;
+            padding: 20px;
+        }
+        .sidebar h5, .sidebar a {
+            color: white;
+        }
+        .sidebar a {
+            display: block;
+            margin: 10px 0;
+            text-decoration: none;
+        }
+        .sidebar a:hover {
+            background-color: #9e1044;
+            padding-left: 10px;
+            border-radius: 5px;
+        }
+        .main {
+            flex-grow: 1;
+            padding: 30px;
+            background-color: #f6e5cd;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="text-center">
+            <div style="font-size: 50px;">👑</div>
+            <h5>{{ request.session.nombre_admin|default:"Administrador" }}</h5>
+        </div>
+        <hr>
+        <a href="{% url 'dashboard_admin' %}">🏠 Inicio admin</a>
+        <a href="{% url 'admin_resultados' %}">📊 Resultados globales</a>
+        <a href="{% url 'admin_estadisticas' %}">📈 Estadísticas por alumno</a>
+        <a href="{% url 'logout_admin' %}">🚪 Cerrar sesión</a>
+    </div>
+
+    <!-- Contenido principal -->
+    <div class="main">
+        <h2 class="mb-4">Estadísticas por alumno</h2>
+
+        {% if messages %}
+    <div class="mb-3">
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show auto-dismiss" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
+
+
+        <form method="GET" class="row g-3 mb-4">
+            <div class="col-auto">
+                <input type="text" name="q" value="{{ query }}" class="form-control" placeholder="Buscar por nombre o matrícula">
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-success" style="background-color: #173966; border-color: #173966;">Buscar</button>
+            </div>
+        </form>
+
+        <table class="table table-bordered table-striped" id="tablaAlumnos">
+            <thead class="table-dark">
+                <tr>
+                    <th class="text-center">Nombre</th>
+                    <th class="text-center">Matrícula</th>
+                    <th class="text-center">Documentos leídos</th>
+                    <th class="text-center">Puntaje total</th>
+                    <th class="text-center">Nivel de comprensión</th>
+                    <th colspan="4" class="text-center">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in resultados %}
+                <tr>
+                    <td>{{ r.nombre }}</td>
+                    <td>{{ r.matricula }}</td>
+                    <td>{{ r.textos }}</td>
+                    <td>{{ r.puntaje }}</td>
+                    <td>{{ r.nivel }}</td>
+                    <td>
+                        <a href="{% url 'ver_resultados_alumno' r.id %}" class="btn btn-sm btn-success" style="background-color: #173966; border-color: #173966;">
+                            Ver
+                        </a>
+                    </td>
+                    <td>
+                        <form action="{% url 'eliminar_usuario' r.id %}" method="post" style="display:inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('¿Estás seguro de eliminar este alumno?')">
+                                Eliminar
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <a href="{% url 'exportar_estadisticas_excel' %}" class="btn btn-success mt-3" style="background-color: #173966; border-color: #173966;">⬇ Exportar a Excel</a>
+        <div class="text-center mt-4">
+            <a href="{% url 'dashboard_admin' %}" class="btn btn-success mt-4 me-auto d-block" style="width: fit-content; background-color: #9e1044; border-color: #9e1044;"> ← Volver al inicio</a>
+        </div>
+    </div>
+
+    <script>
+        // Cierra automáticamente las alertas después de 4 segundos
+        setTimeout(function() {
+            const alerts = document.querySelectorAll('.auto-dismiss');
+            alerts.forEach(function(alert) {
+                alert.classList.remove('show'); // Usa clases Bootstrap para animación
+            });
+        }, 4000); // 4000 milisegundos = 4 segundos
+    </script>
+
+</body>
+</html>

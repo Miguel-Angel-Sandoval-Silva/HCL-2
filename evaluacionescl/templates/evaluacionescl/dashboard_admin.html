@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard Administrador</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            display: flex;
+            min-height: 100vh;
+        }
+        .sidebar {
+            width: 250px;
+            background-color: #b61450;
+            color: white;
+            padding: 20px;
+        }
+        .sidebar h5, .sidebar a {
+            color: white;
+        }
+        .sidebar a {
+            display: block;
+            margin: 10px 0;
+            text-decoration: none;
+        }
+        .sidebar a:hover {
+            background-color: #9e1044;
+            padding-left: 10px;
+            border-radius: 5px;
+        }
+        .main {
+            flex-grow: 1;
+            padding: 30px;
+            background-color: #f6e5cd;
+        }
+        .user-icon {
+            font-size: 50px;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="text-center">
+            <div class="admin-icon" style="font-size: 50px;">👑</div>
+            <h5>{{ request.session.nombre_admin|default:"Administrador" }}</h5>
+        <span class="badge mt-2" style="background-color: #9e1044; color: white; font-size: 1rem;"> Administrador</span> <!-- NUEVA LÍNEA -->
+        </div>
+        <hr>
+        <a href="{% url 'admin:index' %}">⚙️ Panel Django Admin</a>
+        <a href="{% url 'dashboard_admin' %}">🏠 Inicio admin</a>
+        <a href="{% url 'logout_admin' %}">🚪 Cerrar sesión</a>
+    </div>
+
+    <div class="main">
+
+        {% if messages %}
+        <div class="mt-2">
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show auto-dismiss" role="alert">
+                    {{ message|linebreaksbr }}
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+        <h2>Bienvenido, administrador</h2>
+        <p>Selecciona una acción:</p>
+
+        <div class="row g-4 mt-3">
+            <div class="col-md-4">
+                <a href="{% url 'admin_resultados' %}" class="btn btn-primary w-100" style="background-color: #9e1044; border-color: #9e1044">
+                    📊 Ver resultados globales
+                </a>
+            </div>
+            <div class="col-md-4">
+                <a href="{% url 'admin_estadisticas' %}" class="btn btn-success w-100" style="background-color: #173966; border-color: #173966" >
+                    📈 Estadísticas por alumno
+                </a>
+            </div>
+	<div class="col-md-4">
+	    <a href="{% url 'subir_pdf' %}" class="btn btn-primary w-100" style="background-color: #117a8b; border-color: #117a8b">
+	      📄 Subir PDFs
+	    </a>
+	  </div>
+	</div>
+           <!-- <div class="col-md-4">-->
+               <!-- <a href="{% url 'resetear_datos' %}" class="btn btn-outline-danger w-100">-->
+                   <!-- ⚠️ Resetear datos de sistema </a>-->
+           <!-- </div>-->
+
+    <script>
+        setTimeout(function () {
+            const alerts = document.querySelectorAll('.auto-dismiss');
+            alerts.forEach(function (alert) {
+                alert.classList.remove('show');  // Activa la transición (fade-out)
+                alert.addEventListener('transitionend', function () {
+                    alert.remove();  // Remueve del DOM cuando la animación termina
+                });
+            });
+        }, 4000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Registro de Administrador</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .mb-3{
+            color: #ffffff;
+        }
+    </style>
+</head>
+<body class="bg-light">
+<div class="container mt-5">
+    <h3 class="mb-4 text-center">Registro de Administrador</h3>
+    {% if messages %}
+      {% for message in messages %}
+        <div class="alert {% if message.tags %}alert-{{ message.tags }}{% endif %}">
+          {{ message }}
+        </div>
+      {% endfor %}
+    {% endif %}
+    <form method="POST" class="card p-4 shadow-sm" style="background-color: #720026">
+        {% csrf_token %}
+        <div class="mb-3">
+            <label for="id_nombre" class="form-label">Nombre</label>
+            <input type="text" name="nombre" class="form-control" id="id_nombre" placeholder="¿Cuál es tu nombre?" >
+        </div>
+        <div class="mb-3">
+            <label for="id_apellido" class="form-label">Apellido</label>
+            <input type="text" name="apellido" class="form-control" id="id_apellido" placeholder="¿Cuál es tu apellido?" >
+        </div>
+        <div class="mb-3">
+            <label for="id_matricula" class="form-label">Matrícula</label>
+            <input type="text" name="matricula" class="form-control" id="id_matricula" placeholder="Introduce tu matrícula" >
+        </div>
+        <div class="mb-3">
+            <label for="id_contrasena" class="form-label">Contraseña</label>
+            <input type="password" name="contrasena" class="form-control" id="id_contrasena" placeholder="Crea tu contraseña" >
+        </div>
+        <button type="submit" id="btn-registrar" class="btn btn-success w-100" style="background-color: #800f2f; border-color: #ffffff;">Registrarse</button>
+        <div class="text-center mt-3" style="color: #ffffff;">
+            <p>¿Ya tienes cuenta? <a href="{% url 'login_admin' %}" style="color: #ffffff;">Inicia sesión aquí</a></p>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const inputMatricula = document.querySelector('#id_matricula');
+    const botonRegistrar = document.querySelector('#btn-registrar');
+    let timer;  // <--- nueva variable para controlar el tiempo
+
+    inputMatricula.addEventListener('input', function() {
+        const matricula = inputMatricula.value;
+
+        if (matricula.length > 0) {
+            fetch('/verificar_matricula_admin/?matricula=' + matricula)
+                .then(response => response.json())
+                .then(data => {
+                    let avisoExistente = document.querySelector('#aviso-matricula');
+                    if (!avisoExistente) {
+                        avisoExistente = document.createElement('div');
+                        avisoExistente.id = 'aviso-matricula';
+                        inputMatricula.parentElement.appendChild(avisoExistente);
+                    }
+
+                    // Mostrar el mensaje
+                    if (data.existe) {
+                        avisoExistente.innerHTML = "<small class='text-danger'>Esta matrícula ya está ocupada.</small>";
+                        botonRegistrar.disabled = true;
+                    } else {
+                        avisoExistente.innerHTML = "<small class='text-success'>Matrícula disponible.</small>";
+                        botonRegistrar.disabled = false;
+                    }
+
+                    // Reiniciar el temporizador
+                    clearTimeout(timer);
+                    timer = setTimeout(() => {
+                        if (avisoExistente) {
+                            avisoExistente.innerHTML = '';
+                        }
+                    }, 2000);  // Tiempo en milisegundos (3000 = 3 segundos)
+                });
+        } else {
+            botonRegistrar.disabled = false;
+            clearTimeout(timer);
+            let avisoExistente = document.querySelector('#aviso-matricula');
+            if (avisoExistente) {
+                avisoExistente.innerHTML = '';
+            }
+        }
+    });
+});
+</script>
+
+
+</body>
+</html>
