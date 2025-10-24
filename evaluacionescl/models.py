@@ -46,6 +46,23 @@ class RegistroAdmin(models.Model):
 
     def __str__(self):
         return f"{self.nombre} {self.apellido}"
+    
+
+class Lectura(models.Model):
+    TIPO_TEXTO_OPCIONES = [
+        ('Argumentativo', 'Argumentativo'),
+        ('Descriptivo', 'Descriptivo'),
+        ('Expositivo', 'Expositivo'),
+        ('Narrativo', 'Narrativo'),
+    ]
+    
+    titulo = models.CharField(max_length=255)
+    tipo_texto = models.CharField(max_length=50, choices=TIPO_TEXTO_OPCIONES)
+    archivo_pdf = models.FileField(upload_to='bancotext/')
+    conteo_palabras = models.IntegerField(default=0, editable=False)
+
+    def __str__(self):
+        return self.titulo  
 
 
 class EvaluacionLectura(models.Model):
@@ -76,6 +93,9 @@ class EvaluacionLecturaIndividual(models.Model):
 
     fecha_lectura = models.DateTimeField(auto_now_add=True)  # ok si ya migraste o diste default
 
+    palabras_por_minuto = models.IntegerField(null=True, blank=True)
+    tiempo_lectura_segundos = models.FloatField(null=True, blank=True)
+    
     def __str__(self):
         return f"{self.usuario} - {self.titulo_lectura} - {self.tipo_texto}"
 

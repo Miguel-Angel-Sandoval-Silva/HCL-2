@@ -74,16 +74,18 @@
     </div>
 
     <form method="POST" action="{% url 'guardar_respuesta' %}">
-        {% csrf_token %}
-        <input type="hidden" name="evaluacion_id" value="{{ evaluacion_id }}">
+    {% csrf_token %}
+    <input type="hidden" name="evaluacion_id" value="{{ evaluacion_id }}">
 
-        <div class="mb-3">
-            <label for="respuesta" class="form-label">Tu respuesta:</label>
-            <textarea name="respuesta" id="respuesta" class="form-control" rows="5" required></textarea>
-        </div>
+    <input type="hidden" name="tiempo_lectura" value="{{ tiempo_lectura }}">
 
-        <button type="submit" class="btn btn-success" style="background-color: #006d77;">Enviar respuesta</button>
-    </form>
+    <div class="mb-3">
+        <label for="respuesta" class="form-label">Tu respuesta:</label>
+        <textarea name="respuesta" id="respuesta" class="form-control" rows="5" required></textarea>
+    </div>
+
+    <button type="submit" class="btn btn-success" style="background-color: #006d77;">Enviar respuesta</button>
+</form>
 </div>
 
 </body>

@@ -6,7 +6,7 @@ from django.http import JsonResponse
 from django.template.loader import render_to_string
 import subprocess
 import os
-from ..models import RegistroUsuarios, EvaluacionLecturaIndividual
+from ..models import Lectura, RegistroUsuarios, EvaluacionLecturaIndividual, EvaluacionLectura, RegistroAdmin, VistaAdmin
 
 VAL_MAX = 3
 
@@ -497,73 +497,55 @@ from django.contrib import messages
 from django.shortcuts import render, redirect
 
 def subir_pdf(request):
-    # mapa: nombre del input (minúscula) -> carpeta destino (Capitalizada)
-    inputs_a_carpetas = {
-        'argumentativo': 'Argumentativo',
-        'descriptivo': 'Descriptivo',
-        'expositivo': 'Expositivo',
-        'narrativo': 'Narrativo',
-    }
-
     if request.method == 'POST':
+        # Verificamos si se enviaron archivos en la petición
+        if not request.FILES:
+            messages.error(request, "No se seleccionó ningún archivo.")
+            return redirect('subir_pdf')
+
         subidos_ok = 0
-
-        for input_name, carpeta in inputs_a_carpetas.items():
-            archivo = request.FILES.get(input_name)
-
-            if not archivo:
-                messages.error(request, f"⚠ No se seleccionó archivo para '{carpeta}'.")
-                continue
-
-            # Validaciones de tipo
-            es_pdf_ext = archivo.name.lower().endswith('.pdf')
-            # algunos navegadores mandan 'application/pdf' (esperado) y otros variantes; toleramos ambas
-            es_pdf_mime = getattr(archivo, 'content_type', '') in ('application/pdf', 'application/x-pdf')
-            if not (es_pdf_ext or es_pdf_mime):
-                messages.error(request, f"❌ El archivo '{archivo.name}' no parece ser un PDF válido.")
-                continue
-
-            # Carpeta destino (DEBE existir)
-            ruta_destino = os.path.join(settings.MEDIA_ROOT, 'bancotext', carpeta)
-            if not os.path.isdir(ruta_destino):
-                messages.error(
-                    request,
-                    f"❌ La carpeta destino '{carpeta}' no existe en bancotext. "
-                    "Verifica la estructura en el servidor."
-                )
-                continue  # no crearla
-
-            # Normalizar nombre (evita espacios)
-            nombre_archivo = archivo.name.replace(' ', '_')
-            ruta_archivo = os.path.join(ruta_destino, nombre_archivo)
-
-            # No sobrescribir
-            if os.path.exists(ruta_archivo):
-                messages.error(
-                    request,
-                    f"⚠ Ya existe un archivo llamado '{nombre_archivo}' en {carpeta}. "
-                    "Cámbiale el nombre e inténtalo de nuevo."
-                )
-                continue
-
-            # Guardado en chunks
+        # Iteramos sobre cada archivo que el usuario subió
+        for input_name, archivo_subido in request.FILES.items():
+            
+            # Extraemos el tipo de texto (Argumentativo, etc.) del nombre del input
             try:
-                with open(ruta_archivo, 'wb+') as destino:
-                    for chunk in archivo.chunks():
-                        destino.write(chunk)
+                tipo_texto = input_name.replace('archivo_', '').capitalize()
+            except:
+                continue # Ignoramos inputs con nombres inesperados
+
+            # Creamos una instancia de nuestro nuevo modelo 'Lectura'
+            nueva_lectura = Lectura(
+                titulo=archivo_subido.name.replace('.pdf', '').replace('_', ' '),
+                tipo_texto=tipo_texto,
+                archivo_pdf=archivo_subido
+            )
+            
+            try:
+                # Guardamos el objeto en la base de datos.
+                # Django se encarga de guardar el archivo físico en la carpeta correcta.
+                nueva_lectura.save()
+                
+                # --- INICIA LA LÓGICA PARA CONTAR PALABRAS ---
+                texto_completo = ""
+                # Abrimos el PDF que Django acaba de guardar usando su ruta
+                with fitz.open(nueva_lectura.archivo_pdf.path) as doc:
+                    for pagina in doc:
+                        texto_completo += pagina.get_text("text")
+                
+                conteo = len(texto_completo.split())
+                nueva_lectura.conteo_palabras = conteo
+                # Actualizamos el registro en la BD con el número de palabras
+                nueva_lectura.save(update_fields=['conteo_palabras'])
+                # --- FIN DE LA LÓGICA ---
+
+                messages.success(request, f"✅ '{archivo_subido.name}' subido y procesado ({conteo} palabras).")
                 subidos_ok += 1
-                messages.success(request, f"✅ '{nombre_archivo}' subido a {carpeta}.")
+
             except Exception as e:
-                messages.error(request, f"❌ Error al guardar '{nombre_archivo}': {e}")
-
-        # Mensaje global al final del POST
-        if subidos_ok > 0:
-            messages.success(request, f"Se subieron exitosamente {subidos_ok} PDF(s).")
-        else:
-            messages.warning(request, "No se subió ningún PDF válido.")
-
+                messages.error(request, f"❌ Error al procesar '{archivo_subido.name}': {e}")
+        
         return redirect('subir_pdf')
 
-    # Para GET
+    # Para el método GET, simplemente mostramos la página de subida
     return render(request, 'evaluacionescl/subir_pdf.html')
 

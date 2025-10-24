@@ -9,7 +9,8 @@ from torch.nn.functional import softmax
 from transformers import BertTokenizer, BertForSequenceClassification
 from django.shortcuts import render, redirect
 from django.conf import settings
-from ..models import RegistroUsuarios, EvaluacionLecturaIndividual, EvaluacionLectura, LecturaEnCurso
+from ..models import RegistroUsuarios, EvaluacionLecturaIndividual, EvaluacionLectura, LecturaEnCurso, Lectura
+from django.contrib import messages
 
 # Cargar modelo NLP y BERT
 import os
@@ -205,6 +206,8 @@ def mostrar_fragmento(request):
     tipo_texto = request.GET.get("tipo") or request.session.get("tipo_texto")
     titulo = request.GET.get("titulo")
 
+    tiempo_lectura = request.GET.get('tiempo_lectura_segundos', '0')
+
     if not tipo_texto or not titulo:
         return render(request, "evaluacionescl/no_fragmento.html", {
             "mensaje": "Aún no has seleccionado un texto para evaluar. Por favor, elige una categoría primero."
@@ -226,7 +229,8 @@ def mostrar_fragmento(request):
             "fragmento": evaluacion.fragmento,
             "instruccion": evaluacion.instruccion,
             "evaluacion_id": evaluacion.id,
-            "es_pendiente": True
+            "es_pendiente": True,
+            "tiempo_lectura": tiempo_lectura
         })
 
     # Si no hay evaluación previa o el fragmento está vacío, generamos nuevo
@@ -268,7 +272,8 @@ def mostrar_fragmento(request):
         "fragmento": fragmento,
         "instruccion": instruccion,
         "evaluacion_id": evaluacion.id,
-        "es_pendiente": True
+        "es_pendiente": True,
+        "tiempo_lectura": tiempo_lectura
     })
 
 def classify_inference(sentence, inference):
@@ -292,9 +297,9 @@ def guardar_respuesta(request):
         except (TypeError, ValueError):
             messages.error(request, "ID de evaluación inválido.")
             return redirect("dashboard_usuario")
-
+        
         respuesta = request.POST.get("respuesta", "").strip()
-
+        
         try:
             evaluacion = EvaluacionLecturaIndividual.objects.get(id=eval_id)
         except EvaluacionLecturaIndividual.DoesNotExist:
@@ -309,53 +314,78 @@ def guardar_respuesta(request):
             messages.warning(request, "Esta evaluación ya fue respondida.")
             return redirect("resultados_usuario")
 
-        # ✅ Guardar respuesta y clasificar
+        # --- Guardado de los datos de la evaluación actual ---
         evaluacion.respuesta_usuario = respuesta
         clase, _ = classify_inference(evaluacion.fragmento, respuesta)
         if not clase:
             clase = "no_inferencia_sinsentido"
         evaluacion.puntaje = calcular_puntaje(clase)
         evaluacion.tipo_inferencia = clase
-        evaluacion.save()
+        
+        try:
+            tiempo_lectura_segundos = float(request.POST.get('tiempo_lectura', 0))
+            evaluacion.tiempo_lectura_segundos = tiempo_lectura_segundos
 
-        # 🧼 Limpiar lectura en curso
-        request.session.pop(f"lectura_en_curso_{evaluacion.tipo_texto}", None)
-        LecturaEnCurso.objects.filter(usuario=evaluacion.usuario, tipo_texto=evaluacion.tipo_texto).delete()
+            # Corrección clave: reemplazar guiones bajos para buscar el título correctamente
+            titulo_base = evaluacion.titulo_lectura.replace('.pdf', '').replace('_', ' ')
+            lectura_obj = Lectura.objects.get(titulo=titulo_base, tipo_texto=evaluacion.tipo_texto)
+            
+            ppm = 0
+            if tiempo_lectura_segundos > 0 and lectura_obj.conteo_palabras > 0:
+                ppm = round((lectura_obj.conteo_palabras / tiempo_lectura_segundos) * 60)
+            evaluacion.palabras_por_minuto = ppm
+        except (Lectura.DoesNotExist, Exception) as e:
+            print(f"ADVERTENCIA al calcular PPM: {e}")
+        
+        evaluacion.save() # Guardamos la evaluación individual con todos sus datos
 
-        # 🧮 Calcular desempeño
+        # --- LÓGICA FINAL PARA CALCULAR EL PROMEDIO PONDERADO ---
         usuario = evaluacion.usuario
         tipo = evaluacion.tipo_texto
 
-        lecturas = EvaluacionLecturaIndividual.objects.filter(
+        # 1. Obtenemos TODAS las evaluaciones completadas de este tipo para el usuario
+        todas_las_evaluaciones = EvaluacionLecturaIndividual.objects.filter(
+            usuario=usuario, tipo_texto=tipo, puntaje__isnull=False
+        )
+        
+        puntajes_ponderados = []
+        # 2. Calculamos el puntaje ponderado para CADA UNA de ellas
+        for eval_individual in todas_las_evaluaciones:
+            puntaje_inferencia = calcular_porcentaje(eval_individual.puntaje)
+            
+            ppm_eval = eval_individual.palabras_por_minuto or 0
+            puntaje_velocidad = 50 # Por defecto es 'Bajo'
+            if ppm_eval >= 230: puntaje_velocidad = 100
+            elif ppm_eval >= 150: puntaje_velocidad = 75
+            
+            puntaje_final_ponderado = (puntaje_inferencia * 0.80) + (puntaje_velocidad * 0.20)
+            puntajes_ponderados.append(puntaje_final_ponderado)
+
+        # 3. Calculamos el promedio de todos los puntajes
+        promedio_final = 0
+        if puntajes_ponderados:
+            promedio_final = sum(puntajes_ponderados) / len(puntajes_ponderados)
+
+        # 4. Determinamos el nivel basado en el PROMEDIO
+        if promedio_final >= 90: nivel = "Alto (Comprensión profunda)"
+        elif promedio_final >= 60: nivel = "Medio (Comprensión adecuada)"
+        elif promedio_final >= 30: nivel = "Bajo (Comprensión superficial)"
+        else: nivel = "Deficiente (No comprensión)"
+            
+        # 5. Guardamos o actualizamos el resumen con los datos promediados correctos
+        EvaluacionLectura.objects.update_or_create(
             usuario=usuario,
             tipo_texto=tipo,
-            respuesta_usuario__isnull=False,
-            puntaje__isnull=False
+            defaults={
+                'textos_leidos': todas_las_evaluaciones.count(),
+                'porcentaje': promedio_final,
+                'nivel_comprension': nivel
+            }
         )
-
-        total = lecturas.count()
-        puntos = sum([l.puntaje for l in lecturas])
-        promedio = puntos / total if total > 0 else 0
-        porcentaje = calcular_porcentaje(promedio)
-
-        if porcentaje >= 90:
-            nivel = "Alto (Comprensión profunda)"
-        elif porcentaje >= 60:
-            nivel = "Medio (Comprensión adecuada)"
-        elif porcentaje >= 30:
-            nivel = "Bajo (Comprensión superficial)"
-        else:
-            nivel = "Deficiente (No comprensión)"
-
-        resumen, _ = EvaluacionLectura.objects.get_or_create(
-            usuario=usuario,
-            tipo_texto=tipo
-        )
-
-        resumen.textos_leidos = total or 0
-        resumen.porcentaje = porcentaje
-        resumen.nivel_comprension = nivel
-        resumen.save()
+        
+        # --- Limpieza de sesión ---
+        request.session.pop(f"lectura_en_curso_{tipo}", None)
+        LecturaEnCurso.objects.filter(usuario=usuario, tipo_texto=tipo).delete()
 
         return redirect("resultados_usuario")
 
@@ -423,7 +453,8 @@ def resultados_usuario(request):
     return render(request, "evaluacionescl/tabla_resultados.html", {
         "resultados": resultados,
         "ultima_inferencia": inferencia_limpia,
-        "pendientes": pendientes
+        "pendientes": pendientes,
+        "ultima_eval": ultima_eval
     })
 
 # ✅ 5. ver_grafica_tipo (con título, fecha y hora en líneas separadas)
@@ -467,9 +498,21 @@ def ver_grafica_tipo(request, tipo_texto):
             etiqueta = f"{titulo}\n{fecha_linea1}\n{fecha_linea2}"
             titulos.append(etiqueta)
 
-            porcentaje = calcular_porcentaje(l.puntaje) if l.puntaje is not None else 0
-            porcentajes.append(porcentaje)
-            tooltips.append(f"{int(porcentaje)}%" if l.puntaje is not None else "Sin evaluar")
+            puntaje_inferencia = calcular_porcentaje(l.puntaje) if l.puntaje is not None else 0
+            
+            # 2. Puntaje de velocidad (0-100)
+            ppm = l.palabras_por_minuto or 0
+            puntaje_velocidad = 50 # Por defecto es 'Bajo'
+            if ppm >= 230:
+                puntaje_velocidad = 100
+            elif ppm >= 150:
+                puntaje_velocidad = 75
+            
+            # 3. Aplicar fórmula ponderada
+            porcentaje_ponderado = (puntaje_inferencia * 0.80) + (puntaje_velocidad * 0.20)
+            
+            porcentajes.append(porcentaje_ponderado)
+            tooltips.append(f"{int(porcentaje_ponderado)}%")
 
             tipo = l.tipo_inferencia
             if tipo == "no_inferencia_sinsentido":

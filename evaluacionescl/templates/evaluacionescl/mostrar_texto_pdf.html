@@ -39,7 +39,6 @@
 </head>
 <body>
 
-    <!-- Barra lateral -->
     <div class="sidebar">
         <div class="text-center">
             <span class="user-icon">👨‍🎓</span>
@@ -52,23 +51,57 @@
         <a href="{% url 'logout_usuario' %}">🚪 Cerrar sesión</a>
     </div>
 
-    <!-- Contenido principal -->
     <div class="main-content">
 
         {% if es_pendiente %}
         <div class="alert alert-info text-center" role="alert">
           ✏️ ¡Hola de nuevo! Estás retomando una lectura pendiente. Completa esta actividad para continuar.
         </div>
-      {% endif %}
+        {% endif %}
 
         <h2 class="mb-3">Disfruta de la lectura</h2>
         <p>Cuando termines, presiona "Siguiente".</p>
 
         <iframe src="{{ ruta_texto|urlencode }}?t={{ timestamp }}" width="100%" height="600px"></iframe>
         <div class="text-end mt-4">
-            <a href="{% url 'mostrar_fragmento' %}?titulo={{ titulo }}&tipo={{ tipo_texto }}" class="btn btn-success" style="background-color: #006d77;">Siguiente</a>
+            <a id="siguiente-link" href="{% url 'mostrar_fragmento' %}?titulo={{ titulo }}&tipo={{ tipo_texto }}" class="btn btn-success" style="background-color: #006d77;">Siguiente</a>
         </div>
     </div>
+
+    <script>
+        // Creamos una clave única para este intento de lectura específico
+        const storageKey = 'startTime_{{ tipo_texto }}_{{ titulo }}';
+
+        // Verificamos si ya existe una hora de inicio en la memoria de la sesión del navegador
+        let startTime = sessionStorage.getItem(storageKey);
+
+        if (!startTime) {
+            // Si NO existe, significa que es la primera vez que el usuario ve el texto.
+            // Registramos la hora actual y la guardamos en sessionStorage.
+            startTime = performance.now();
+            sessionStorage.setItem(storageKey, startTime);
+        }
+        // Si SÍ existe, significa que el usuario volvió a esta página. No hacemos nada y
+        // simplemente seguimos usando la hora de inicio original que ya estaba guardada.
+
+        const siguienteLink = document.getElementById('siguiente-link');
+
+        siguienteLink.addEventListener('click', function(event) {
+            const endTime = performance.now();
+            
+            // Calculamos la duración usando la hora de inicio ORIGINAL del almacenamiento
+            const tiempoEnSegundos = ((endTime - parseFloat(startTime)) / 1000).toFixed(2);
+            
+            // Obtenemos la URL original para evitar añadir el parámetro varias veces
+            const originalUrl = "{% url 'mostrar_fragmento' %}?titulo={{ titulo }}&tipo={{ tipo_texto }}";
+            
+            // Construimos la nueva URL con el tiempo incluido
+            this.href = originalUrl + '&tiempo_lectura_segundos=' + tiempoEnSegundos;
+
+            // Limpiamos el tiempo guardado para que la próxima vez que se lea este texto, el cronómetro sea nuevo
+            sessionStorage.removeItem(storageKey);
+        });
+    </script>
 
 </body>
 </html>
