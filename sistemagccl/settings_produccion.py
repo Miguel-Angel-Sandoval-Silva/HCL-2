@@ -17,7 +17,7 @@ STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")  # Requerido en producción
 # Seguridad
 SECRET_KEY = config('SECRET_KEY')
 DEBUG = False  #PRODUCCIÓN: nunca debe ser True
-ALLOWED_HOSTS = ['TU_DOMINIO.com', 'IP_PUBLICA']  # Cambiar cuando despliegues
+ALLOWED_HOSTS = ['138.197.198.209', '127.0.0.1', 'localhost']  # Cambiar cuando despliegues
 
 X_FRAME_OPTIONS = 'DENY'  # Seguridad: evita que embezan tu sitio
 
