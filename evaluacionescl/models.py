@@ -117,6 +117,9 @@ class LecturaEnCurso(models.Model):
     titulo_lectura = models.CharField(max_length=200)
     fecha_inicio = models.DateTimeField(auto_now=True)
 
+    segundos_acumulados = models.FloatField(default=0)      # total acumulado en segundos
+    en_pausa = models.BooleanField(default=False)           # bandera de pausa
+    ultimo_inicio = models.DateTimeField(null=True, blank=True)  # cuándo se reanudó por última vez
     class Meta:
         unique_together = ("usuario", "tipo_texto")  # Solo una lectura activa por tipo
 

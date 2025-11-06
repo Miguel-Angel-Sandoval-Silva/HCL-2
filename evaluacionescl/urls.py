@@ -1,7 +1,7 @@
 from django.urls import path
 from django.conf import settings
 from django.conf.urls.static import static
-from .views import registro_usuario, registro_admin, login_usuario, login_admin, logout_usuario, dashboard_usuario, dashboard_admin, seleccion_tipo_texto, mostrar_texto_pdf, resultados_usuario, ver_grafica_tipo, admin_resultados, admin_estadisticas, mostrar_fragmento, guardar_respuesta, ver_resultados_alumno, ver_grafica_alumno_tipo, exportar_admin_estadisticas_excel, exportar_admin_resultados_excel, resetear_datos, eliminar_usuario, logout_admin,verificar_matricula_usuario,verificar_matricula_admin,subir_pdf
+from .views import registro_usuario, registro_admin, login_usuario, login_admin, logout_usuario, dashboard_usuario, dashboard_admin, seleccion_tipo_texto, mostrar_texto_pdf, resultados_usuario, ver_grafica_tipo, admin_resultados, admin_estadisticas, mostrar_fragmento, guardar_respuesta, ver_resultados_alumno, ver_grafica_alumno_tipo, exportar_admin_estadisticas_excel, exportar_admin_resultados_excel, resetear_datos, eliminar_usuario, logout_admin,verificar_matricula_usuario,verificar_matricula_admin,subir_pdf, evaluacion_views as ev
 
 urlpatterns = [
     path('registro_usuario/', registro_usuario, name='registro_usuario'),
@@ -29,4 +29,6 @@ urlpatterns = [
     path("exportar_resultados_excel/", exportar_admin_resultados_excel, name="exportar_resultados_excel"),
     path("resetear_datos/", resetear_datos, name="resetear_datos"),
     path('eliminar_usuario/<int:usuario_id>/', eliminar_usuario, name='eliminar_usuario'),
+    path("pausar_lectura/", ev.pausar_lectura, name="pausar_lectura"),
+    path("reanudar_lectura/", ev.reanudar_lectura, name="reanudar_lectura"),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
