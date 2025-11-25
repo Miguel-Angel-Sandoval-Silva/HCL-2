@@ -11,6 +11,11 @@ from django.shortcuts import render, redirect
 from django.conf import settings
 from ..models import RegistroUsuarios, EvaluacionLecturaIndividual, EvaluacionLectura, LecturaEnCurso, Lectura
 from django.contrib import messages
+from django.views.decorators.http import require_POST
+from django.http import JsonResponse
+from django.utils import timezone
+
+from evaluacionescl.models import LecturaEnCurso, RegistroUsuarios
 
 # Cargar modelo NLP y BERT
 import os
@@ -120,24 +125,24 @@ def mostrar_texto_pdf(request):
 
     usuario = RegistroUsuarios.objects.get(id=usuario_id)
 
-    # 1️⃣ Verificar si ya hay texto guardado en sesión
+    # 1) Verificar si ya hay texto guardado en sesión
     texto_en_sesion = request.session.get(f"lectura_en_curso_{tipo_texto}")
 
     if texto_en_sesion:
         texto_seleccionado = texto_en_sesion
         es_pendiente = True
-
     else:
-        # 2️⃣ Buscar respaldo en base de datos
-        lectura_guardada = LecturaEnCurso.objects.filter(usuario=usuario, tipo_texto=tipo_texto).first()
+        # 2) Buscar respaldo en base de datos
+        lectura_guardada = LecturaEnCurso.objects.filter(
+            usuario=usuario, tipo_texto=tipo_texto
+        ).first()
 
         if lectura_guardada:
             texto_seleccionado = lectura_guardada.titulo_lectura
             request.session[f"lectura_en_curso_{tipo_texto}"] = texto_seleccionado
             es_pendiente = True
-
         else:
-            # 3️⃣ Buscar evaluación pendiente (ya iniciada en fragmento)
+            # 3) Buscar evaluación pendiente (ya iniciada en fragmento)
             pendiente = EvaluacionLecturaIndividual.objects.filter(
                 usuario=usuario,
                 tipo_texto=tipo_texto,
@@ -153,9 +158,8 @@ def mostrar_texto_pdf(request):
                     defaults={"titulo_lectura": texto_seleccionado}
                 )
                 es_pendiente = True
-
             else:
-                # 4️⃣ Elegir nuevo texto no leído
+                # 4) Elegir nuevo texto no leído
                 carpeta = os.path.join(settings.MEDIA_ROOT, "bancotext", tipo_texto)
                 archivos = [f for f in os.listdir(carpeta) if f.endswith(".pdf")]
 
@@ -168,20 +172,35 @@ def mostrar_texto_pdf(request):
                 no_leidos = [a for a in archivos if a not in leidos]
 
                 if not no_leidos:
-                    return render(request, "evaluacionescl/no_textos_disponibles.html", {
-                        "mensaje": "Has leído todos los textos de esta categoría."
-                    })
+                    return render(
+                        request,
+                        "evaluacionescl/no_textos_disponibles.html",
+                        {"mensaje": "Has leído todos los textos de esta categoría."}
+                    )
 
                 texto_seleccionado = random.choice(no_leidos)
                 request.session[f"lectura_en_curso_{tipo_texto}"] = texto_seleccionado
                 es_pendiente = False
-
-                # 🔐 Guardar lectura en curso en la BD
+                # Guardar lectura en curso en la BD
                 LecturaEnCurso.objects.update_or_create(
                     usuario=usuario,
                     tipo_texto=tipo_texto,
                     defaults={"titulo_lectura": texto_seleccionado}
                 )
+
+    # NUEVO: Garantiza el registro y prepara el tiempo acumulado
+    lc, _ = LecturaEnCurso.objects.update_or_create(
+        usuario=usuario,
+        tipo_texto=tipo_texto,
+        defaults={"titulo_lectura": texto_seleccionado}
+    )
+
+    # Si no está en pausa y no hay reloj corriendo, arráncalo
+    if lc.ultimo_inicio is None and not lc.en_pausa:
+        lc.ultimo_inicio = timezone.now()
+        lc.save(update_fields=["ultimo_inicio"])
+
+    initial_elapsed = lc.segundos_acumulados or 0.0
 
     ruta = f"{settings.MEDIA_URL}bancotext/{tipo_texto}/{texto_seleccionado}"
 
@@ -190,8 +209,11 @@ def mostrar_texto_pdf(request):
         "titulo": texto_seleccionado,
         "timestamp": int(time()),
         "es_pendiente": es_pendiente,
-        "tipo_texto": tipo_texto
+        "tipo_texto": tipo_texto,
+        "initial_elapsed": initial_elapsed,
     })
+
+       
 
 
 # ✅ 2. mostrar_fragment
@@ -533,5 +555,56 @@ def ver_grafica_tipo(request, tipo_texto):
         "tipos_inferencia": tipos_inferencia,
         "tooltips": tooltips
     })
+@require_POST
+def pausar_lectura(request):
+    usuario_id = request.session.get("usuario_id")
+    if not usuario_id:
+        return JsonResponse({"ok": False, "error": "no-auth"}, status=401)
+
+    titulo = request.POST.get("titulo")
+    tipo = request.POST.get("tipo")
+    if not (titulo and tipo):
+        return JsonResponse({"ok": False, "error": "bad-params"}, status=400)
+
+    usuario = RegistroUsuarios.objects.get(id=usuario_id)
+    try:
+        lc = LecturaEnCurso.objects.get(
+            usuario=usuario, tipo_texto=tipo, titulo_lectura=titulo
+        )
+    except LecturaEnCurso.DoesNotExist:
+        return JsonResponse({"ok": False, "error": "not-found"}, status=404)
+
+    if lc.ultimo_inicio and not lc.en_pausa:
+        delta = (timezone.now() - lc.ultimo_inicio).total_seconds()
+        lc.segundos_acumulados = (lc.segundos_acumulados or 0) + max(0, delta)
+
+    lc.en_pausa = True
+    lc.ultimo_inicio = None
+    lc.save(update_fields=["segundos_acumulados", "en_pausa", "ultimo_inicio"])
+    return JsonResponse({"ok": True, "segundos_acumulados": round(lc.segundos_acumulados, 2)})
+
+
+@require_POST
+def reanudar_lectura(request):
+    usuario_id = request.session.get("usuario_id")
+    if not usuario_id:
+        return JsonResponse({"ok": False, "error": "no-auth"}, status=401)
+
+    titulo = request.POST.get("titulo")
+    tipo = request.POST.get("tipo")
+    if not (titulo and tipo):
+        return JsonResponse({"ok": False, "error": "bad-params"}, status=400)
+
+    usuario = RegistroUsuarios.objects.get(id=usuario_id)
+    lc, _ = LecturaEnCurso.objects.get_or_create(
+        usuario=usuario, tipo_texto=tipo, titulo_lectura=titulo
+    )
+
+    if lc.en_pausa or lc.ultimo_inicio is None:
+        lc.ultimo_inicio = timezone.now()
+        lc.en_pausa = False
+        lc.save(update_fields=["ultimo_inicio", "en_pausa"])
+
+    return JsonResponse({"ok": True, "segundos_acumulados": round(lc.segundos_acumulados or 0, 2)})
 
 #--------------------------------------------------------------------

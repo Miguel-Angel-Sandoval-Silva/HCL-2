@@ -6,9 +6,33 @@ from django.http import JsonResponse
 from django.template.loader import render_to_string
 import subprocess
 import os
+import fitz
 from ..models import Lectura, RegistroUsuarios, EvaluacionLecturaIndividual, EvaluacionLectura, RegistroAdmin, VistaAdmin
 
 VAL_MAX = 3
+def porcentaje_final(e):
+    """
+    Calcula el porcentaje ponderado de UNA lectura individual replicando
+    la lógica de guardar_respuesta:
+      - porcentaje_inferencia = (puntaje / VAL_MAX) * 100
+      - puntaje_velocidad: 50 | 75 | 100 según palabras_por_minuto
+      - resultado = porcentaje_inferencia*0.80 + puntaje_velocidad*0.20
+    """
+    if e.puntaje is None:
+        return 0.0
+    try:
+        porcentaje_inferencia = (float(e.puntaje) / float(VAL_MAX)) * 100.0
+    except Exception:
+        porcentaje_inferencia = 0.0
+
+    ppm = e.palabras_por_minuto or 0
+    puntaje_velocidad = 50
+    if ppm >= 230:
+        puntaje_velocidad = 100
+    elif ppm >= 150:
+        puntaje_velocidad = 75
+
+    return (porcentaje_inferencia * 0.80) + (puntaje_velocidad * 0.20)
 
 # Vista: Dashboard del administrador
 def dashboard_admin(request):
@@ -27,21 +51,19 @@ def dashboard_admin(request):
     for tipo in tipos:
         lecturas = EvaluacionLecturaIndividual.objects.filter(tipo_texto=tipo)
         total_lecturas = lecturas.count()
-        total_puntos = sum([e.puntaje for e in lecturas if e.puntaje is not None])
-        promedio = (total_puntos / total_lecturas) if total_lecturas > 0 else 0
-        porcentaje = (promedio / VAL_MAX) * 100 if total_lecturas > 0 else 0
+        porcentajes = [porcentaje_final(e) for e in lecturas if e.puntaje is not None]
+        promedio_pct = (sum(porcentajes) / len(porcentajes)) if porcentajes else 0.0
 
         resumen.append({
             "tipo": tipo,
             "total_lecturas": total_lecturas,
-            "promedio_porcentaje": round(porcentaje, 2)
+            "promedio_porcentaje": round(promedio_pct, 2)
         })
+
     contexto = {
         "total_usuarios": total_usuarios,
         "resumen_por_tipo": resumen,
     }
-
-    # 🔴 ESTE return es obligatorio
     return render(request, "evaluacionescl/dashboard_admin.html", contexto)
 
 
@@ -52,29 +74,33 @@ def admin_resultados(request):
 
     for tipo in tipos:
         lecturas = EvaluacionLecturaIndividual.objects.filter(tipo_texto=tipo)
-        cantidad = lecturas.count()
-        suma_puntos = sum([e.puntaje for e in lecturas if e.puntaje is not None])
+
+        # Nuevo: usa porcentaje_final para cada lectura
+        porcentajes = [porcentaje_final(e) for e in lecturas if e.puntaje is not None]
+        cantidad = len(porcentajes)
+        promedio_pct = (sum(porcentajes) / cantidad) if cantidad > 0 else 0.0
 
         if cantidad > 0:
-            promedio = suma_puntos / cantidad
-            porcentaje = (promedio / VAL_MAX) * 100  # Asumiendo VAL_MAX = 3
-
-            if porcentaje >= 90:
-                nivel = f"Alto (Comprensión profunda) - {int(porcentaje)}%"
-            elif porcentaje >= 60:
-                nivel = f"Medio (Comprensión adecuada) - {int(porcentaje)}%"
-            elif porcentaje >= 30:
-                nivel = f"Bajo (Comprensión superficial) - {int(porcentaje)}%"
+            pct = promedio_pct
+            if pct >= 90:
+                nivel = f"Alto (Comprensión profunda) - {int(pct)}%"
+            elif pct >= 60:
+                nivel = f"Medio (Comprensión adecuada) - {int(pct)}%"
+            elif pct >= 30:
+                nivel = f"Bajo (Comprensión superficial) - {int(pct)}%"
             else:
-                nivel = f"Deficiente (No comprensión) - {int(porcentaje)}%"
+                nivel = f"Deficiente (No comprensión) - {int(pct)}%"
         else:
             nivel = "Sin evaluar"
 
         resumen.append({
             "tipo": tipo,
             "cantidad": cantidad,
-            "puntaje_total": suma_puntos,
-            "nivel": nivel
+            # opcional: si tu template lo muestra, puedes mantener un “puntaje_total” estimado
+            # convirtiendo desde porcentaje a escala 0–VAL_MAX:
+            "puntaje_total": round((sum(porcentajes) / 100.0) * VAL_MAX, 2) if cantidad else 0,
+            "promedio_porcentaje": round(promedio_pct, 2),
+            "nivel": nivel,
         })
 
     total_usuarios = RegistroUsuarios.objects.count()
@@ -105,29 +131,35 @@ def admin_estadisticas(request):
     resultados = []
     for user in usuarios:
         lecturas = EvaluacionLecturaIndividual.objects.filter(usuario=user)
-        total_textos = lecturas.count()
-        total_puntos = sum([e.puntaje for e in lecturas if e.puntaje is not None])
-        promedio = (total_puntos / total_textos) if total_textos > 0 else 0
-        porcentaje = (promedio / VAL_MAX) * 100 if total_textos > 0 else 0
+        # Usar porcentaje_final por lectura (ya ponderado); ignorar las que no tienen puntaje
+        porcentajes = [porcentaje_final(e) for e in lecturas if e.puntaje is not None]
+        total_textos = len(porcentajes)
+
+        promedio_pct = (sum(porcentajes) / total_textos) if total_textos else 0.0
 
         if total_textos > 0:
-            if porcentaje >= 90:
-                nivel = f"Alto (Comprensión profunda) - {int(porcentaje)}%"
-            elif porcentaje >= 60:
-                nivel = f"Medio (Comprensión adecuada) - {int(porcentaje)}%"
-            elif porcentaje >= 30:
-                nivel = f"Bajo (Comprensión superficial) - {int(porcentaje)}%"
+            pct = promedio_pct
+            if pct >= 90:
+                nivel = f"Alto (Comprensión profunda) - {int(round(pct))}%"
+            elif pct >= 60:
+                nivel = f"Medio (Comprensión adecuada) - {int(round(pct))}%"
+            elif pct >= 30:
+                nivel = f"Bajo (Comprensión superficial) - {int(round(pct))}%"
             else:
-                nivel = f"Deficiente (No comprensión) - {int(porcentaje)}%"
+                nivel = f"Deficiente (No comprensión) - {int(round(pct))}%"
         else:
             nivel = "Sin evaluar"
+
+        # Conserva “puntaje” si tu template lo muestra, derivado desde % (escala 0–VAL_MAX)
+        puntaje_equivalente = round((sum(porcentajes) / 100.0) * VAL_MAX, 2) if total_textos else 0
 
         resultados.append({
             "id": user.id,
             "nombre": f"{user.nombre} {user.apellido}",
             "matricula": user.matricula,
             "textos": total_textos,
-            "puntaje": total_puntos,
+            "puntaje": puntaje_equivalente,             # si la plantilla usa “puntaje”
+            "porcentaje": round(promedio_pct, 2),       # úsalo si la plantilla muestra porcentaje
             "nivel": nivel
         })
 
@@ -165,20 +197,21 @@ def ver_resultados_alumno(request, usuario_id):
 
     for tipo in tipos:
         lecturas = EvaluacionLecturaIndividual.objects.filter(usuario=alumno, tipo_texto=tipo)
-        total = lecturas.count()
+        # Usa porcentaje_final por lectura (no promedies puntaje crudo)
+        porcentajes = [porcentaje_final(e) for e in lecturas if e.puntaje is not None]
+        total = len(porcentajes)
 
         if total:
-            puntos = sum([e.puntaje for e in lecturas if e.puntaje is not None])
-            promedio = puntos / total
-            porcentaje = calcular_porcentaje(promedio)
+            promedio_pct = sum(porcentajes) / total
+            porcentaje = promedio_pct
             if porcentaje >= 90:
-                nivel = f"Alto (Comprensión profunda) - {int(porcentaje)}%"
+                nivel = f"Alto (Comprensión profunda) - {int(round(porcentaje))}%"
             elif porcentaje >= 60:
-                nivel = f"Medio (Comprensión adecuada) - {int(porcentaje)}%"
+                nivel = f"Medio (Comprensión adecuada) - {int(round(porcentaje))}%"
             elif porcentaje >= 30:
-                nivel = f"Bajo (Comprensión superficial) - {int(porcentaje)}%"
+                nivel = f"Bajo (Comprensión superficial) - {int(round(porcentaje))}%"
             else:
-                nivel = f"Deficiente (No comprensión) - {int(porcentaje)}%"
+                nivel = f"Deficiente (No comprensión) - {int(round(porcentaje))}%"
         else:
             porcentaje = 0
             nivel = "Sin evaluar"
@@ -187,17 +220,10 @@ def ver_resultados_alumno(request, usuario_id):
             "tipo": tipo,
             "cantidad": total,
             "nivel": nivel,
-            "porcentaje": porcentaje
+            "porcentaje": round(porcentaje, 2)
         })
 
-    # Validación si no hay lecturas
-    evaluaciones_total = sum([r["cantidad"] for r in resultados])
-    if evaluaciones_total == 0:
-        return render(request, "evaluacionescl/sin_resultados_alumno.html", {
-            "mensaje": f"El alumno {alumno.nombre} aún no ha realizado ninguna evaluación."
-        })
-
-    # 📌 AQUI EMPIEZA LA LÓGICA DE LA GRÁFICA GLOBAL MENSUAL
+    # … deja igual la lógica de la gráfica global mensual …
     from collections import defaultdict
     from django.utils.timezone import localtime
     from datetime import datetime
@@ -235,7 +261,6 @@ def ver_resultados_alumno(request, usuario_id):
         mes_nombre = meses_esp.get(mes_abbr, mes_abbr)
         meses.append(f"{mes_nombre} {fecha_obj.year}")
 
-    # ➕ Nivel global textual
     if promedios_globales:
         ultimo = promedios_globales[-1]
         if ultimo >= 90:
@@ -249,7 +274,6 @@ def ver_resultados_alumno(request, usuario_id):
     else:
         nivel_global = "Sin evaluar"
 
-    # ⬇️ RETURN COMPLETO
     return render(request, "evaluacionescl/ver_resultados_alumno.html", {
         "resultados": resultados,
         "alumno": alumno,
@@ -259,6 +283,8 @@ def ver_resultados_alumno(request, usuario_id):
         "promedios": promedios_globales,
         "nivel_global": nivel_global
     })
+
+
 from django.shortcuts import render, get_object_or_404
 from ..models import RegistroUsuarios, EvaluacionLecturaIndividual
 
@@ -306,7 +332,7 @@ def ver_grafica_alumno_tipo(request, usuario_id, tipo_texto):
             etiqueta = f"{titulo}\n{fecha_linea1}\n{fecha_linea2}"
             titulos.append(etiqueta)
 
-            porcentaje = calcular_porcentaje(l.puntaje) if l.puntaje is not None else 0
+            porcentaje = porcentaje_final(l) if l.puntaje is not None else 0
             porcentajes.append(porcentaje)
             tooltips.append(f"{int(porcentaje)}%" if l.puntaje is not None else "Sin evaluar")
 
@@ -358,8 +384,11 @@ def exportar_admin_estadisticas_excel(request):
     for user in usuarios:
         lecturas = EvaluacionLecturaIndividual.objects.filter(usuario=user)
         total = lecturas.count()
-        puntaje_total = sum([e.puntaje for e in lecturas if e.puntaje is not None])
-        porcentaje = calcular_porcentaje(puntaje_total / total) if total else 0
+        porcentajes = [porcentaje_final(e) for e in lecturas if e.puntaje is not None]
+        promedio_pct = (sum(porcentajes) / len(porcentajes)) if porcentajes else 0.0
+        porcentaje = promedio_pct
+        # Si quieres conservar “puntaje_total”, puedes derivarlo del %:
+        puntaje_total = round((sum(porcentajes) / 100.0) * VAL_MAX, 2) if total else 0
 
         if total:
             if porcentaje >= 90:
@@ -414,10 +443,11 @@ def exportar_admin_resultados_excel(request):
 
     for tipo in tipos:
         lecturas = EvaluacionLecturaIndividual.objects.filter(tipo_texto=tipo)
-        cantidad = lecturas.count()
-        suma = sum([e.puntaje for e in lecturas if e.puntaje is not None])
-        promedio = (suma / cantidad) if cantidad > 0 else 0
-        porcentaje = (promedio / VAL_MAX * 100) if cantidad > 0 else 0
+        porcentajes = [porcentaje_final(e) for e in lecturas if e.puntaje is not None]
+        cantidad = len(porcentajes)
+        promedio_pct = (sum(porcentajes) / cantidad) if cantidad else 0.0
+        porcentaje = promedio_pct
+        suma = round((sum(porcentajes) / 100.0) * VAL_MAX, 2) if cantidad else 0
 
         if cantidad > 0:
             if porcentaje >= 90:

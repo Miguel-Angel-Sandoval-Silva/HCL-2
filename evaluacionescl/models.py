@@ -95,6 +95,7 @@ class EvaluacionLecturaIndividual(models.Model):
 
     palabras_por_minuto = models.IntegerField(null=True, blank=True)
     tiempo_lectura_segundos = models.FloatField(null=True, blank=True)
+    porcentaje_final = models.FloatField(null=True, blank=True)
     
     def __str__(self):
         return f"{self.usuario} - {self.titulo_lectura} - {self.tipo_texto}"
@@ -117,6 +118,9 @@ class LecturaEnCurso(models.Model):
     titulo_lectura = models.CharField(max_length=200)
     fecha_inicio = models.DateTimeField(auto_now=True)
 
+    segundos_acumulados = models.FloatField(default=0)      # total acumulado en segundos
+    en_pausa = models.BooleanField(default=False)           # bandera de pausa
+    ultimo_inicio = models.DateTimeField(null=True, blank=True)  # cuándo se reanudó por última vez
     class Meta:
         unique_together = ("usuario", "tipo_texto")  # Solo una lectura activa por tipo
 

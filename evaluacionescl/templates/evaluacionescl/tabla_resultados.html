@@ -85,34 +85,46 @@
         </tbody>
     </table>
 
-    {% if ultima_inferencia and ultima_inferencia != "Sin evaluar" %}
-    <div class="alert alert-info mt-4">
-        <p class="mb-2">
-            Tu respuesta más reciente fue clasificada como: 
-            <strong>{{ ultima_inferencia }}</strong>
-        </p>
 
-        {% if ultima_eval and ultima_eval.palabras_por_minuto is not None %}
-            <hr>
-            <p class="mb-2">
-                Tu velocidad en esa lectura fue de: 
-                <strong>{{ ultima_eval.palabras_por_minuto }} PPM</strong> 
-                (tardaste {{ ultima_eval.tiempo_lectura_segundos|floatformat:2 }} segundos)
-            </p>
-            <p class="mb-0">
-                Tu nivel de velocidad fue:
-                <strong>
-                    {% if ultima_eval.palabras_por_minuto >= 230 %}
-                        Avanzado
-                    {% elif ultima_eval.palabras_por_minuto >= 150 %}
-                        Promedio
-                    {% else %}
-                        Bajo
-                    {% endif %}
-                </strong>
-            </p>
-        {% endif %}
-    </div>
+
+    {% if ultima_inferencia and ultima_inferencia != "Sin evaluar" %}
+  <div class="alert alert-info mt-4">
+    <p class="mb-2">
+      Tu respuesta más reciente fue clasificada como:
+      <strong>{{ ultima_inferencia }}</strong>
+    </p>
+
+    {% if ultima_eval and ultima_eval.tiempo_lectura_segundos %}
+      <p class="mb-2">
+        Tiempo de lectura:
+        <strong>{{ ultima_eval.tiempo_lectura_segundos|floatformat:2 }} s</strong>
+      </p>
+    {% endif %}
+
+    {% if ultima_eval %}
+      {% if ultima_eval.palabras_por_minuto is not None %}
+        <hr>
+        <p class="mb-2">
+          Velocidad:
+          <strong>{{ ultima_eval.palabras_por_minuto }} PPM</strong>
+        </p>
+        <p class="mb-0">
+          Nivel de velocidad:
+          <strong>
+            {% if ultima_eval.palabras_por_minuto >= 230 %}
+              Avanzado
+            {% elif ultima_eval.palabras_por_minuto >= 150 %}
+              Promedio
+            {% else %}
+              Bajo
+            {% endif %}
+          </strong>
+        </p>
+      {% else %}
+        <p class="mb-0"><em>Velocidad (PPM) no disponible</em></p>
+      {% endif %}
+    {% endif %}
+  </div>
 {% endif %}
 </div>
 <div class="mt-4 text-center">
