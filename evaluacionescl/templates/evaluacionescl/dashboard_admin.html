@@ -5,39 +5,13 @@
     <title>Dashboard Administrador</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body {
-            display: flex;
-            min-height: 100vh;
-        }
-        .sidebar {
-            width: 250px;
-            background-color: #b61450;
-            color: white;
-            padding: 20px;
-        }
-        .sidebar h5, .sidebar a {
-            color: white;
-        }
-        .sidebar a {
-            display: block;
-            margin: 10px 0;
-            text-decoration: none;
-        }
-        .sidebar a:hover {
-            background-color: #9e1044;
-            padding-left: 10px;
-            border-radius: 5px;
-        }
-        .main {
-            flex-grow: 1;
-            padding: 30px;
-            background-color: #f6e5cd;
-        }
-        .user-icon {
-            font-size: 50px;
-            text-align: center;
-            margin-bottom: 10px;
-        }
+        body { display: flex; min-height: 100vh; }
+        .sidebar { width: 250px; background-color: #b61450; color: white; padding: 20px; }
+        .sidebar h5, .sidebar a { color: white; }
+        .sidebar a { display: block; margin: 10px 0; text-decoration: none; }
+        .sidebar a:hover { background-color: #9e1044; padding-left: 10px; border-radius: 5px; }
+        .main { flex-grow: 1; padding: 30px; background-color: #f6e5cd; }
+        .user-icon { font-size: 50px; text-align: center; margin-bottom: 10px; }
     </style>
 </head>
 <body>
@@ -45,7 +19,7 @@
         <div class="text-center">
             <div class="admin-icon" style="font-size: 50px;">👑</div>
             <h5>{{ request.session.nombre_admin|default:"Administrador" }}</h5>
-        <span class="badge mt-2" style="background-color: #9e1044; color: white; font-size: 1rem;"> Administrador</span> <!-- NUEVA LÍNEA -->
+            <span class="badge mt-2" style="background-color: #9e1044; color: white; font-size: 1rem;">Administrador</span>
         </div>
         <hr>
         <a href="{% url 'admin:index' %}">⚙️ Panel Django Admin</a>
@@ -63,7 +37,7 @@
                 </div>
             {% endfor %}
         </div>
-    {% endif %}
+        {% endif %}
 
         <h2>Bienvenido, administrador</h2>
         <p>Selecciona una acción:</p>
@@ -79,25 +53,42 @@
                     📈 Estadísticas por alumno
                 </a>
             </div>
-	<div class="col-md-4">
-	    <a href="{% url 'subir_pdf' %}" class="btn btn-primary w-100" style="background-color: #117a8b; border-color: #117a8b">
-	      📄 Subir PDFs
-	    </a>
-	  </div>
-	</div>
-           <!-- <div class="col-md-4">-->
-               <!-- <a href="{% url 'resetear_datos' %}" class="btn btn-outline-danger w-100">-->
-                   <!-- ⚠️ Resetear datos de sistema </a>-->
-           <!-- </div>-->
+            <div class="col-md-4">
+                <a href="{% url 'subir_pdf' %}" class="btn btn-primary w-100" style="background-color: #117a8b; border-color: #117a8b">
+                    📄 Subir PDFs
+                </a>
+            </div>
+        </div>
+
+        <hr class="my-4">
+        <h3>Resumen por tipo de texto</h3>
+        <table class="table table-bordered table-striped mt-2">
+            <thead class="table-dark">
+                <tr>
+                    <th>Tipo de texto</th>
+                    <th>Lecturas</th>
+                    <th>Promedio %</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in resumen_por_tipo %}
+                <tr>
+                    <td>{{ r.tipo }}</td>
+                    <td>{{ r.total_lecturas }}</td>
+                    <td>{{ r.promedio_porcentaje|floatformat:0 }}%</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+    </div>
 
     <script>
         setTimeout(function () {
             const alerts = document.querySelectorAll('.auto-dismiss');
             alerts.forEach(function (alert) {
-                alert.classList.remove('show');  // Activa la transición (fade-out)
-                alert.addEventListener('transitionend', function () {
-                    alert.remove();  // Remueve del DOM cuando la animación termina
-                });
+                alert.classList.remove('show');
+                alert.addEventListener('transitionend', function () { alert.remove(); });
             });
         }, 4000);
     </script>

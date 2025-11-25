@@ -95,6 +95,7 @@ class EvaluacionLecturaIndividual(models.Model):
 
     palabras_por_minuto = models.IntegerField(null=True, blank=True)
     tiempo_lectura_segundos = models.FloatField(null=True, blank=True)
+    porcentaje_final = models.FloatField(null=True, blank=True)
     
     def __str__(self):
         return f"{self.usuario} - {self.titulo_lectura} - {self.tipo_texto}"
