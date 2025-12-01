@@ -49,114 +49,310 @@
           <button id="btnResume" type="button" class="btn btn-success btn-sm" disabled>Reanudar</button>
         </div>
 
-        <iframe src="{{ ruta_texto|urlencode }}?t={{ timestamp }}" width="100%" height="600px"></iframe>
+        <div id="pdfContainer" style="position:relative; width:100%; height:600px;">
+<style>
+#pdfOverlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: white;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    z-index: 999999 !important;  /* <--- ESTO ES LA CLAVE */
+}
+
+#pdfContainer {
+    position: relative;
+    z-index: 0; /* asegurar referencia */
+}
+
+/* PDF.js mete elementos con z-index muy alto, así que los derribamos */
+iframe#visorPDF, 
+iframe#visorPDF * {
+    z-index: auto !important;
+    position: relative !important;
+}
+</style>
+
+    <!-- PDF REAL -->
+    <iframe id="visorPDF" src="/static/pdfjs/web/viewer_minimal.html?file={{ ruta_texto|urlencode }}" width="100%" height="100%" style="border:none;"></iframe>
+    <div id="globalPdfOverlay" style=" position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; background: white; opacity: 0; pointer-events: none; tr>
+
+</div>
+
+
+       
+        
         <div class="text-end mt-4">
             <a id="siguiente-link" href="{% url 'mostrar_fragmento' %}?titulo={{ titulo }}&tipo={{ tipo_texto }}" class="btn btn-success" style="background-color: #006d77;">Siguiente</a>
         </div>
     </div>
 
-    <!-- REEMPLAZA tu script anterior por este -->
+
     <script>
-    // Lee CSRF desde la cookie (Django la envía por defecto si tienes CSRF middleware)
-    function getCookie(name) {
-      const value = `; ${document.cookie}`;
-      const parts = value.split(`; ${name}=`);
-      if (parts.length === 2) return parts.pop().split(';').shift();
+/*
+  Script único: cronómetro (RAF), pausa/reanudar con backend, overlay fijo,
+  inactividad (2 min), visibilitychange -> pausa, manual resume only.
+  Reemplaza todo lo anterior por este y borra otros scripts relacionados.
+*/
+
+// --- CONFIG ---
+const TIEMPO_INACTIVIDAD = 120000; // 2 min
+
+// DOM
+const elCrono = document.getElementById('cronometro');
+const iframe = document.getElementById('visorPDF');
+const btnPause = document.getElementById('btnPause');
+const btnResume = document.getElementById('btnResume');
+const siguienteLink = document.getElementById('siguiente-link');
+
+// en vez de fijar overlay una vez, obtenlo dinámicamente cuando lo necesitemos:
+function getOverlay() {
+  let o = document.getElementById('globalPdfOverlay');
+  if (!o) {
+    // si no existe (por timing), lo creamos y lo añadimos al body inmediatamente
+    o = document.createElement('div');
+    o.id = 'globalPdfOverlay';
+    o.style.position = 'fixed';
+    o.style.top = '0';
+    o.style.left = '0';
+    o.style.width = '100vw';
+    o.style.height = '100vh';
+    o.style.background = 'white';
+    o.style.opacity = '0';
+    o.style.pointerEvents = 'none';
+    o.style.transition = 'opacity 0.2s ease';
+    o.style.zIndex = '2147483647';
+    document.body.appendChild(o);
+    console.log('Overlay creado dinámicamente');
+  }
+  return o;
+}
+
+
+// CSRF helper (usa tu función existente si la tienes)
+function getCookie(name) {
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return parts.pop().split(';').shift();
+  return null;
+}
+const csrftoken = getCookie('csrftoken') || '';
+
+// --- Estado global (usar window.* para facilidad y depuración)
+window.elapsedBefore = parseFloat("{{ initial_elapsed|default:'0' }}") || 0; // segundos ya guardados
+window.startMs = Date.now();
+window.paused = false;
+window.rafId = null;
+let inactividadTimer = null;
+let visibilityPausePending = false; // evita reentradas
+
+// Formatea
+function fmt(x){ return (Math.round(x*100)/100).toFixed(2); }
+
+// Overlay controls
+function bloquearPDF(){
+  const o = getOverlay();
+  o.style.opacity = '1';
+  o.style.pointerEvents = 'auto';
+
+  if (iframe) iframe.style.pointerEvents = 'none';
+}
+function desbloquearPDF(){
+  const o = getOverlay();
+  o.style.opacity = '0';
+  o.style.pointerEvents = 'none';
+
+  if (iframe) iframe.style.pointerEvents = 'auto';
+}
+
+// RAF tick
+function tick(){
+  if (window.paused) return;
+  const now = Date.now();
+  const totalSec = (window.elapsedBefore||0) + (now - window.startMs)/1000;
+  if (elCrono) elCrono.textContent = fmt(totalSec);
+  window.rafId = requestAnimationFrame(tick);
+}
+
+// start loop
+function startLoop(){
+  cancelAnimationFrame(window.rafId);
+  window.startMs = Date.now();
+  window.paused = false;
+  if (btnPause) btnPause.disabled = false;
+  if (btnResume) btnResume.disabled = true;
+  // ensure UI shows current elapsedBefore before continuing
+  if (elCrono) elCrono.textContent = fmt(window.elapsedBefore || 0);
+  window.rafId = requestAnimationFrame(tick);
+}
+
+// safe POST helper (x-www-form-urlencoded)
+async function postTo(url, data){
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-CSRFToken': csrftoken
+      },
+      body: new URLSearchParams(data)
+    });
+    return await res.json();
+  } catch(e){
+    console.error('postTo error', e);
+    return null;
+  }
+}
+
+// Pausa segura: llama al backend y actualiza elapsedBefore
+async function doPauseServer(){
+  // evitar llamadas simultáneas
+  try {
+    const resp = await postTo("{% url 'pausar_lectura' %}", {titulo: "{{ titulo }}", tipo: "{{ tipo_texto }}"});
+    if (resp && resp.ok && typeof resp.segundos_acumulados === 'number') {
+      window.elapsedBefore = resp.segundos_acumulados;
     }
+  } catch(e){
+    console.warn('doPauseServer err', e);
+  }
+}
 
-    (function(){
-      // Variables provenientes del servidor
-      const titulo = "{{ titulo|escapejs }}";
-      const tipo = "{{ tipo_texto|escapejs }}";
-      const initialElapsed = parseFloat("{{ initial_elapsed|default:'0' }}") || 0;
+// Reanudar seguro: notificar backend (no necesitamos respuesta con segundos)
+async function doResumeServer(){
+  try {
+    await postTo("{% url 'reanudar_lectura' %}", {titulo: "{{ titulo }}", tipo: "{{ tipo_texto }}"});
+  } catch(e){
+    console.warn('doResumeServer err', e);
+  }
+}
 
-      // DOM
-      const elCrono = document.getElementById('cronometro');
-      const btnPause = document.getElementById('btnPause');
-      const btnResume = document.getElementById('btnResume');
-      const siguienteLink = document.getElementById('siguiente-link');
+// Pause local: stop RAF and update UI (but also call server)
+async function pauseLocalAndServer(){
+  if (window.paused) return;
+  // calcular tiempo acumulado hasta ahora
+  const now = Date.now();
+  const sinceStart = (now - (window.startMs || now))/1000;
+  window.elapsedBefore = (window.elapsedBefore || 0) + Math.max(0, sinceStart);
+  // marcar pausado y detener RAF
+  window.paused = true;
+  cancelAnimationFrame(window.rafId);
+  // mostrar inmediatamente el valor calculado
+  if (elCrono) elCrono.textContent = fmt(window.elapsedBefore || 0);
+  // enviar al servidor y sincronizar con la respuesta (si hay)
+  await doPauseServer();
+  // si servidor devolvió valor, usa el servidor (fallback)
+  if (elCrono) elCrono.textContent = fmt(window.elapsedBefore || 0);
+}
 
-      // Estado del cronómetro
-      let elapsedBefore = initialElapsed; // segundos acumulados guardados en servidor
-      let startMs = Date.now();
-      let paused = false;
-      let rafId = null;
 
-      const csrftoken = getCookie('csrftoken') || (document.querySelector('[name=csrfmiddlewaretoken]')||{}).value || '';
+// Resume local: call server then start loop
+async function resumeLocalAndServer(){
+  if (!window.paused) return;
+  await doResumeServer();
+  startLoop();
+}
 
-      function fmt(x){ return (Math.round(x*100)/100).toFixed(2); }
+// ---- Inactividad ----
+function reiniciarInactividad(){
+  clearTimeout(inactividadTimer);
+  inactividadTimer = setTimeout(async () => {
+    console.log('⏸ Pausa por INACTIVIDAD (auto)');
+    await pauseLocalAndServer();
+    bloquearPDF();
+    // 🔥 HABILITAR EL BOTÓN DE REANUDAR
+    if (btnPause) btnPause.disabled = true;
+    if (btnResume) btnResume.disabled = false;
+  }, TIEMPO_INACTIVIDAD);
+}
 
-      function tick(){
-        if (paused) return;
-        const now = Date.now();
-        const totalSec = elapsedBefore + (now - startMs)/1000;
-        if (elCrono) elCrono.textContent = fmt(totalSec);
-        rafId = requestAnimationFrame(tick);
-      }
+// ---- Visibility change (cambio de pestaña) ----
+document.addEventListener('visibilitychange', async () => {
+  if (document.hidden) {
+    // evita doble llamado
+    if (visibilityPausePending) return;
+    visibilityPausePending = true;
+    console.log('⏸ Pausa por CAMBIO DE PESTAÑA (auto)');
+    await pauseLocalAndServer();
+    bloquearPDF();
+    // 🔥 HABILITAR REANUDAR
+    if (btnPause) btnPause.disabled = true;
+    if (btnResume) btnResume.disabled = false;
+    visibilityPausePending = false;
+  } else {
+    // al volver no reanudamos automáticamente; el alumno debe presionar reanudar
+    console.log('▶ Volvió a la pestaña (overlay/paused persists until manual resume)');
+    reiniciarInactividad();
+    // habilitar botón reanudar
+    if (btnResume) btnResume.disabled = false;
+    if (btnPause) btnPause.disabled = true;
+  }
+});
 
-      function startLoop(){
-        cancelAnimationFrame(rafId);
-        startMs = Date.now();
-        paused = false;
-        if (btnPause) btnPause.disabled = false;
-        if (btnResume) btnResume.disabled = true;
-        tick();
-      }
+// ---- Activity events: sólo reinician timer (no desbloquean) ----
+['mousemove','keydown','scroll','touchstart'].forEach(e=>{
+  document.addEventListener(e, ()=>{ reiniciarInactividad(); }, {passive:true});
+});
 
-      async function post(url, data){
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'X-CSRFToken': csrftoken
-          },
-          body: new URLSearchParams(data)
-        });
-        try { return await res.json(); } catch(e) { return {}; }
-      }
+// ---- Botones: Pausa manual y reanudar manual ----
+if (btnPause) {
+  btnPause.addEventListener('click', async ()=>{
+    if (window.paused) return;
+    // pause immediately visually and logically
+    await pauseLocalAndServer();
+    bloquearPDF();
+    if (btnPause) btnPause.disabled = true;
+    if (btnResume) btnResume.disabled = false;
+    console.log('⏸ Lectura pausada (manual)');
+  });
+}
+if (btnResume) {
+  btnResume.addEventListener('click', async ()=>{
+    if (!window.paused) return;
+    await resumeLocalAndServer();
+    desbloquearPDF();
+    reiniciarInactividad();
+    if (btnPause) btnPause.disabled = false;
+    if (btnResume) btnResume.disabled = true;
+    console.log('▶ Reanudado (manual)');
+  });
+}
 
-      if (btnPause) {
-        btnPause.addEventListener('click', async ()=>{
-          if (paused) return;
-          paused = true;
-          cancelAnimationFrame(rafId);
-          try{
-            const resp = await post("{% url 'pausar_lectura' %}", {titulo, tipo});
-            if (resp && resp.ok && typeof resp.segundos_acumulados === 'number') {
-              elapsedBefore = resp.segundos_acumulados; // sincroniza con servidor
-              if (elCrono) elCrono.textContent = fmt(elapsedBefore);
-            }
-          }catch(e){}
-          if (btnPause) btnPause.disabled = true;
-          if (btnResume) btnResume.disabled = false;
-        });
-      }
+// ---- Siguiente link: añade tiempo actual al pulsar ----
+if (siguienteLink) {
+  siguienteLink.addEventListener('click', ()=>{
+    const now = Date.now();
+    const total = window.paused ? (window.elapsedBefore || 0) : ((window.elapsedBefore||0) + (now - window.startMs)/1000);
+    const originalUrl = siguienteLink.getAttribute('href') || siguienteLink.href;
+    const sep = originalUrl.includes('?') ? '&' : '?';
+    siguienteLink.href = originalUrl + sep + 'tiempo_lectura_segundos=' + encodeURIComponent(fmt(total));
+  });
+}
 
-      if (btnResume) {
-        btnResume.addEventListener('click', async ()=>{
-          if (!paused) return;
-          try{
-            await post("{% url 'reanudar_lectura' %}", {titulo, tipo});
-          }catch(e){}
-          startLoop();
-        });
-      }
+// ---- Inicia todo: sincroniza si hay valor server y arranca el loop ----
+(async function boot(){
+  // Pequeña espera para que las variables del servidor/inicialización estén listas
+  // (en caso de que postPausa/otras hayan corrido justo antes)
+  await new Promise(r=>setTimeout(r, 250));
+  // asegurar que la UI muestre el valor inicial correcto
+  if (elCrono) elCrono.textContent = fmt(window.elapsedBefore || 0);
+  // iniciar loop solo si no está pausado (por si el servidor dejó estado pausado)
+  if (!window.paused) startLoop();
+  reiniciarInactividad();
+})();
+</script>
 
-      // Al hacer clic en "Siguiente", añade el tiempo total a la URL
-      if (siguienteLink) {
-        siguienteLink.addEventListener('click', ()=>{
-          const now = Date.now();
-          const total = paused ? elapsedBefore : (elapsedBefore + (now - startMs)/1000);
-          const originalUrl = siguienteLink.getAttribute('href') || siguienteLink.href;
-          const sep = originalUrl.includes('?') ? '&' : '?';
-          siguienteLink.href = originalUrl + sep + 'tiempo_lectura_segundos=' + encodeURIComponent(fmt(total));
-        });
-      }
 
-      // Inicia el cronómetro
-      startLoop();
-    })();
-    </script>
+
+
+     
+
+
+
+
 
 </body>
 </html>
